@@ -57,7 +57,7 @@ porton-azul-chatbot/
 │   └── extraer_mensaje.js          # Extracción de datos del webhook
 │
 ├── sheets/
-│   └── estructura_sheets.md        # Estructura de las hojas de Google Sheets
+│   └── estructura_sheets.xlsx        # Estructura de las hojas de Google Sheets
 │
 └── README.md
 ```
