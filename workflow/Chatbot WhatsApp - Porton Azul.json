@@ -1,0 +1,627 @@
+{
+  "name": "Chatbot WhatsApp - Porton Azul",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "options": {}
+      },
+      "id": "f5a59dbd-413e-4af6-ac55-a29b7b0f81f2",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        -80
+      ],
+      "webhookId": "22970138-3427-4dcb-8751-bfa27de0b68d"
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $input.all()[0].json;\n\n// Los datos están en webhookData.body.data\nconst bodyData = webhookData.body && webhookData.body.data \n  ? webhookData.body.data \n  : null;\n\nif (!bodyData) {\n  return [{ json: { skip: true } }];\n}\n\n// Ignorar mensajes enviados por el bot\nif (bodyData.fromMe === true) {\n  return [{ json: { skip: true } }];\n}\n\nconst phone = String(bodyData.from || '')\n  .replace('@c.us', '')\n  .replace('@g.us', '')\n  .replace('+', '')\n  .trim();\n\nif (!phone || phone.length < 7) {\n  return [{ json: { skip: true } }];\n}\n\nlet message = String(bodyData.body || bodyData.caption || '');\nconst messageType = String(bodyData.type || 'text');\n\nif (messageType === 'image' || messageType === 'photo') {\n  message = '__IMAGEN__';\n}\n\nconst messageLower = message.toLowerCase().trim();\n\nreturn [{ json: { \n  skip: false,\n  phone, \n  message, \n  messageLower, \n  messageType \n} }];"
+      },
+      "id": "4de61e32-cc29-4e55-bbf9-d58948c9784a",
+      "name": "Extraer Mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1gPqywwpWOe3DWSpbW8EIR9R4nqh6D7mjAGD-wjJAVvI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Estado",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "=phone",
+              "lookupValue": "={{ $json.phone }}"
+            }
+          ]
+        },
+        "options": {
+          "returnAllMatches": "returnFirstMatch"
+        }
+      },
+      "id": "e562052e-b316-4f83-892d-ed1372a46095",
+      "name": "Buscar Cliente",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        448,
+        -112
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bUOPfJZ2uah0OHH9",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ════════════════════════════════════════════════════════\n// BOT LOGIC COMPLETO - RESTAURANTE MARISQUERÍA PORTÓN AZUL\n// ════════════════════════════════════════════════════════\n\nconst messageData = $('Extraer Mensaje').first().json;\n\nlet state = 'new';\nlet currentOrder = '';\nlet currentAddress = '';\n\ntry {\n  const sheetsItems = $('Buscar Cliente').all();\n  if (sheetsItems && sheetsItems.length > 0) {\n    const row = sheetsItems[0].json;\n    if (row && row.phone && String(row.phone).trim() !== '') {\n      state = String(row.state || 'new').trim();\n      currentOrder = String(row.order || '').trim();\n      currentAddress = String(row.address || '').trim();\n    }\n  }\n} catch(e) {\n  state = 'new';\n}\n\n// ══════════════════════════════════════\n// CARTA DEL RESTAURANTE\n// ══════════════════════════════════════\nconst MENU = {\n  'torta de choclo con ceviche': 20,\n  'torta de choclo sola': 3,\n  'tallarin saltado de carne': 25,\n  'tallarín saltado de carne': 25,\n  'lomo saltado': 30,\n  'milanesa de pollo': 25,\n  'chicharron de pollo': 25,\n  'chicharrón de pollo': 25,\n  'bisteck a lo pobre': 30,\n  'pescado frito': 30,\n  'batea en sarza': 30,\n  'chilcano': 30,\n  'chupe de cangrejo': 30,\n  'chupe de pescado': 30,\n  'chupe de langostino': 30,\n  'pescados en salsa de mariscos': 30,\n  'carne seca': 30,\n  'pellejito en zarza': 25,\n  'ceviche de tollo': 30,\n  'ceviche mixto': 35,\n  'ceviche de conchas negras': 30,\n  'sol y sombra': 35,\n  'ceviche de caballa': 25,\n  'leche de tigre': 20,\n  'leche de pantera': 25,\n  'sudado de cabrilla': 50,\n  'sudado de congrio': 60,\n  'sudado de chula': 60,\n  'sudado de robalo': 60,\n  'sudado de mero': 60,\n  'parihuela': 60,\n  'arroz con mariscos': 35,\n  'arroz con conchas negras': 35,\n  'chaufa de mariscos': 35,\n  'tortilla de raya': 30,\n  'tortilla de langostino': 30,\n  'tortilla de langoraya': 35,\n  'chicharron de pescado': 35,\n  'chicharrón de pescado': 35,\n  'chicharron de langostino': 35,\n  'chicharrón de langostino': 35,\n  'chicharron de calamar': 35,\n  'chicharrón de calamar': 35,\n  'chicharron de pota': 30,\n  'chicharrón de pota': 30,\n  'chicharron mixto': 40,\n  'chicharrón mixto': 40,\n  'inca kola': 8,\n  'coca cola': 8,\n  'guarana': 2,\n  'agua mineral': 3,\n  'pilsen': 9,\n  'cristal': 9,\n  'corona': 6,\n  'cusqueña trigo': 10,\n  'cusqueña negra': 10,\n  'refresco de lima': 15,\n  'refresco de maracuya': 15,\n  'refresco de piña': 15,\n  'limonada frozen': 17,\n  'maracuya frozen': 17,\n  'piña frozen': 17,\n  'lima frozen': 17,\n  'porcion de arroz': 6,\n  'yuca frita': 7,\n  'chifles': 2.5,\n  'mote frito': 7,\n  'porcion de cancha': 5,\n  'chileno guisado': 7\n};\n\nconst CARTA = `🦐 *CARTA - RESTAURANTE MARISQUERÍA EL PORTÓN AZUL* 🐟\n\n📌 *ENTRADAS*\n• Torta de Choclo con Ceviche S/20.00\n• Torta de Choclo Sola S/3.00\n\n🍽️ *PLATOS A LA CARTA*\n• Tallarín Saltado de Carne S/25.00\n• Lomo Saltado S/30.00\n• Milanesa de Pollo S/25.00\n• Chicharrón de Pollo S/25.00\n• Bisteck a lo Pobre S/30.00\n• Pescado Frito S/30.00\n\n⭐ *ESPECIALIDADES DE LA CASA*\n• Batea en Sarza S/30.00\n• Chilcano S/30.00\n• Chupe de Cangrejo S/30.00\n• Chupe de Pescado S/30.00\n• Chupe de Langostino S/30.00\n• Carne Seca S/30.00\n• Pellejito en Zarza S/25.00\n\n🍋 *CEVICHES*\n• Ceviche de Tollo S/30.00\n• Ceviche Mixto S/35.00\n• Ceviche de Conchas Negras S/30.00\n• Sol y Sombra S/35.00\n• Ceviche de Caballa S/25.00\n• Leche de Tigre S/20.00\n• Leche de Pantera S/25.00\n\n🐟 *SUDADOS Y PARIHUELAS*\n• Sudado de Cabrilla S/50.00\n• Sudado de Congrio S/60.00\n• Sudado de Mero S/60.00\n• Parihuela S/60.00\n\n🍚 *ARROCES*\n• Arroz con Mariscos S/35.00\n• Chaufa de Mariscos S/35.00\n\n🦑 *CHICHARRONES*\n• Chicharrón de Pescado S/35.00\n• Chicharrón de Langostino S/35.00\n• Chicharrón de Calamar S/35.00\n• Chicharrón Mixto S/40.00\n\n🥤 *BEBIDAS*\n• Inca Kola / Coca Cola S/8.00\n• Pilsen / Cristal S/9.00\n• Corona S/6.00\n• Cusqueña Trigo/Negra S/10.00\n• Refrescos S/15.00\n• Frozen S/17.00\n• Agua Mineral S/3.00\n\n📅 *ESPECIALES:*\n🔸 Sábado: Cabrito S/25.00\n🔸 Domingo: Arroz con Pato S/30.00\n🔸 Lunes: Espesado S/15.00`;\n\nconst PAGOS = `💳 *MÉTODOS DE PAGO:*\n━━━━━━━━━━━━━━━━\n📱 *Yape:* 960336267\n📱 *Plin:* 960336267\n🏦 *BCP:* 194-12345678-0-45\n  A nombre de: El Portón Azul\n\n_Realiza el pago y envía la captura de pantalla del comprobante._`;\n\n// ══════════════════════════════════════\n// FUNCIÓN: Parsear pedido del cliente\n// ══════════════════════════════════════\nfunction parsearPedido(txt) {\n  const msgLower = txt.toLowerCase();\n  let items = [];\n  for (const [nombre, precio] of Object.entries(MENU)) {\n    if (msgLower.includes(nombre)) {\n      const qtyMatch = msgLower.match(new RegExp('(\\\\d+)\\\\s+' + nombre.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')));\n      const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;\n      // Evitar duplicados\n      const yaExiste = items.find(i => i.nombre === nombre.toUpperCase());\n      if (!yaExiste) {\n        items.push({ nombre: nombre.toUpperCase(), qty, precioUnit: precio, subtotal: precio * qty });\n      }\n    }\n  }\n  return items;\n}\n\n// ══════════════════════════════════════\n// FUNCIÓN: Formatear pedido para Sheets\n// ══════════════════════════════════════\nfunction formatearPedidoParaSheets(items) {\n  let texto = '';\n  for (const item of items) {\n    texto += `${item.qty}x ${item.nombre} (S/${item.subtotal.toFixed(2)}) | `;\n  }\n  return texto.slice(0, -3); // quitar último \" | \"\n}\n\n// ══════════════════════════════════════\n// LÓGICA PRINCIPAL\n// ══════════════════════════════════════\nconst { phone, message, messageLower } = messageData;\n\nlet responseMessage = '';\nlet newState = state;\nlet newOrder = currentOrder;\nlet newTotal = 0;\nlet newAddress = currentAddress;\nlet orderNum = '';\nlet pedidoTexto = '';\nlet isPedidoConfirmado = false;\n\n// ─── NUEVO CLIENTE ───────────────────\nif (state === 'new') {\n  responseMessage = `🦐 *¡Bienvenido al Restaurante Marisquería El Portón Azul!* 🐟\n\n_\"El que sabe comer... Sabe esperar\"_\n\n¡Hola! Somos expertos en la mejor comida marinera del norte.\n📍 Ca. San Mateo 427, Nvo. San Lorenzo J.L.O\n📞 960336267\n\nAquí nuestra carta 👇\n\n${CARTA}\n\n_¿Qué deseas ordenar hoy? Escríbenos tu pedido 😊_`;\n  newState = 'waiting_order';\n\n// ─── ESPERANDO PEDIDO ────────────────\n} else if (state === 'waiting_order') {\n  const items = parsearPedido(message);\n\n  if (items.length === 0) {\n    responseMessage = `No pude reconocer tu pedido 😅\n\nPor favor escríbelo así:\n_\"1 ceviche mixto, 1 lomo saltado\"_\n\nO dinos exactamente qué plato deseas de la carta 📋`;\n    newState = 'waiting_order';\n  } else {\n    let resumen = '';\n    let total = 0;\n    for (const item of items) {\n      resumen += `• ${item.qty}x ${item.nombre} — S/${item.subtotal.toFixed(2)}\\n`;\n      total += item.subtotal;\n    }\n    newOrder = JSON.stringify(items);\n    newTotal = total;\n    responseMessage = `¡Excelente elección! 👌\n\nTu pedido:\n${resumen}\n🥤 *¿Deseas agregar algo más?*\nBebidas, gaseosas, cervezas, guarniciones...\n\n_(Escribe lo que deseas o responde \"No, eso es todo\")_`;\n    newState = 'waiting_extras';\n  }\n\n// ─── ESPERANDO EXTRAS ────────────────\n} else if (state === 'waiting_extras') {\n  let items = [];\n  try { items = JSON.parse(currentOrder); } catch(e) {}\n\n  const noExtras = ['no', 'nada', 'ya esta', 'ya está', 'solo eso', 'eso es todo', 'no gracias', 'no quiero', 'sin nada'].some(w => messageLower.includes(w));\n\n  if (!noExtras) {\n    const extras = parsearPedido(message);\n    if (extras.length > 0) {\n      items = [...items, ...extras];\n    }\n  }\n\n  newOrder = JSON.stringify(items);\n  let resumen = '';\n  let total = 0;\n  for (const item of items) {\n    resumen += `• ${item.qty}x ${item.nombre} — S/${item.subtotal.toFixed(2)}\\n`;\n    total += item.subtotal;\n  }\n  newTotal = total;\n\n  responseMessage = `✅ *RESUMEN DE TU PEDIDO:*\n━━━━━━━━━━━━━━━━\n${resumen}━━━━━━━━━━━━━━━━\n💰 *TOTAL: S/${total.toFixed(2)}*\n\n${PAGOS}\n\n📍 *¿Cuál es tu dirección de delivery?*\n_(Ej: Av. Los Pinos 123, Chiclayo)_`;\n  newState = 'waiting_address';\n\n// ─── ESPERANDO DIRECCIÓN ─────────────\n} else if (state === 'waiting_address') {\n  newAddress = message;\n  responseMessage = `📍 *Dirección registrada:*\n${message}\n\n✅ Ahora envíanos la *captura de pantalla del comprobante de pago* para confirmar tu orden 📸\n\n_Puedes enviarla directamente aquí por WhatsApp._`;\n  newState = 'waiting_payment';\n\n// ─── ESPERANDO COMPROBANTE DE PAGO ───\n} else if (state === 'waiting_payment') {\n  const esPago = message === '__IMAGEN__' ||\n    messageLower.includes('ya pague') ||\n    messageLower.includes('ya pagué') ||\n    messageLower.includes('listo') ||\n    messageLower.includes('ya pago') ||\n    messageLower.includes('transferi') ||\n    messageLower.includes('yapé') ||\n    messageLower.includes('yape');\n\n  if (esPago) {\n    // Generar número de orden único\n    orderNum = String(Math.floor(Math.random() * 9000) + 1000);\n\n    // Formatear pedido para registrar en Sheets\n    let items = [];\n    try { items = JSON.parse(currentOrder); } catch(e) {}\n    pedidoTexto = formatearPedidoParaSheets(items);\n\n    // Calcular total final\n    let totalFinal = 0;\n    for (const item of items) { totalFinal += item.subtotal; }\n    newTotal = totalFinal;\n\n    // La dirección final\n    const direccionFinal = newAddress || currentAddress;\n\n    responseMessage = `🎉 *¡Tu orden ha sido confirmada!*\n\n📦 *N° de Orden: #${orderNum}*\n🏠 *Delivery a:* ${direccionFinal}\n\n⏱️ Estamos preparando tu pedido con todo el cariño 🦐\n¡Pronto estará en camino a tu dirección!\n\n¡Gracias por elegir El Portón Azul! 💙\n_\"El que sabe comer... sabe esperar\"_ 🐟`;\n\n    newState = 'completed';\n    newAddress = direccionFinal;\n    isPedidoConfirmado = true; // ← activa el registro en Sheets \"Pedidos\"\n\n  } else {\n    responseMessage = `📸 Necesitamos la *captura de pantalla* del comprobante para confirmar tu pedido.\n\nEnvíala directamente aquí por WhatsApp 😊`;\n    newState = 'waiting_payment';\n  }\n\n// ─── PEDIDO COMPLETADO / NUEVO PEDIDO ─\n} else if (state === 'completed') {\n  responseMessage = `¡Hola de nuevo! 😊 Bienvenido otra vez a El Portón Azul 🦐\n\n¿Deseas hacer un nuevo pedido?\n\n${CARTA}\n\n_Escríbenos qué deseas 😊_`;\n  newState = 'waiting_order';\n  newOrder = '';\n  newAddress = '';\n}\n\n// ══════════════════════════════════════\n// RETURN FINAL — incluye todos los campos\n// ══════════════════════════════════════\nreturn [{\n  json: {\n    phone,\n    message,\n    state,\n    newState,\n    newOrder,\n    newTotal,\n    newAddress,\n    responseMessage,\n    orderNum,            // número de orden (solo cuando isPedidoConfirmado = true)\n    pedidoTexto,         // detalle del pedido formateado para Sheets\n    isPedidoConfirmado   // true solo cuando el cliente envía el comprobante\n  }\n}];"
+      },
+      "id": "ff4a1545-7d4a-46c6-bfff-399fef77d6bb",
+      "name": "Bot Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ultramsg.com/instance163650/messages/chat",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "zk2yit7v237bj5b6"
+            },
+            {
+              "name": "to",
+              "value": "={{ $('Bot Logic').item.json.phone }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Bot Logic').item.json.responseMessage }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c743fc66-4051-43f6-9573-a41931209fd9",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1gPqywwpWOe3DWSpbW8EIR9R4nqh6D7mjAGD-wjJAVvI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Estado",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Bot Logic').item.json.phone }}",
+            "state": "={{ $('Bot Logic').item.json.newState }}",
+            "address": "={{ $('Bot Logic').item.json.newAddress }}",
+            "timestamp": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "phone"
+          ],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "order",
+              "displayName": "order",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "total",
+              "displayName": "total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "address",
+              "displayName": "address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "order_number",
+              "displayName": "order_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error",
+              "displayName": "error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "sent",
+              "displayName": "sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7c0a64e6-aea7-4f1e-adf3-780f8571dfa7",
+      "name": "Guardar Estado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1104,
+        -112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bUOPfJZ2uah0OHH9",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "24a5c70b-dd13-4fa4-8306-e50121525071",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        -64
+      ],
+      "id": "5bf851e7-301b-4db1-913b-441a7ba8dca3",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cd721a0f-afe8-4236-b3b0-13d4eaeef686",
+              "leftValue": "={{ $('Bot Logic').item.json.isPedidoConfirmado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        784,
+        96
+      ],
+      "id": "741f2ce8-18fb-4964-87ae-0566311c23cd",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1gPqywwpWOe3DWSpbW8EIR9R4nqh6D7mjAGD-wjJAVvI",
+          "mode": "list",
+          "cachedResultName": "Porton Azul Bot",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gPqywwpWOe3DWSpbW8EIR9R4nqh6D7mjAGD-wjJAVvI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 652203887,
+          "mode": "list",
+          "cachedResultName": "Pedidos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gPqywwpWOe3DWSpbW8EIR9R4nqh6D7mjAGD-wjJAVvI/edit#gid=652203887"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "=={{ new Date().toLocaleDateString('es-PE') }}",
+            "hora": "=={{ new Date().toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'}) }}",
+            "numero_orden": "=={{ $('Bot Logic').item.json.orderNum }}",
+            "cliente_phone": "=={{ $('Bot Logic').item.json.phone }}",
+            "pedido": "=={{ $('Bot Logic').item.json.pedidoTexto }}",
+            "total": "=={{ $('Bot Logic').item.json.newTotal }}",
+            "direccion": "=={{ $('Bot Logic').item.json.newAddress }}",
+            "estado": "Pagado"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "numero_orden",
+              "displayName": "numero_orden",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cliente_phone",
+              "displayName": "cliente_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pedido",
+              "displayName": "pedido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total",
+              "displayName": "total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1056,
+        80
+      ],
+      "id": "8f8d2775-c0c6-4ad2-996e-5da67a0c5504",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bUOPfJZ2uah0OHH9",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "dcoelloq.app.n8n.cloud",
+            "user-agent": "axios/1.13.2",
+            "content-length": "481",
+            "accept": "application/json, text/plain, */*",
+            "accept-encoding": "gzip, br",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "37.27.175.231",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "FI",
+            "cf-ray": "9d5ceddf1d003807-FRA",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "x-forwarded-for": "37.27.175.231, 172.68.193.174",
+            "x-forwarded-host": "dcoelloq.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-101-5b654465c-gfcd2",
+            "x-is-trusted": "yes",
+            "x-real-ip": "37.27.175.231"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "event_type": "message_received",
+            "instanceId": "163650",
+            "id": "",
+            "referenceId": "",
+            "hash": "5fff11a3d13239b8385d73992370dcad",
+            "data": {
+              "id": "false_51930953179@c.us_AC258ED7B8B4047D3B30AA100E116D9B",
+              "sid": "AC258ED7B8B4047D3B30AA100E116D9B",
+              "from": "51930953179@c.us",
+              "to": "51947337148@c.us",
+              "author": "",
+              "pushname": "Ale",
+              "ack": "",
+              "type": "chat",
+              "body": "Hola",
+              "media": "",
+              "fromMe": false,
+              "self": false,
+              "isForwarded": false,
+              "isMentioned": false,
+              "quotedMsg": {},
+              "mentionedIds": [],
+              "time": 1772418098
+            }
+          },
+          "webhookUrl": "https://dcoelloq.app.n8n.cloud/webhook/whatsapp-webhook",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extraer Mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Mensaje": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Cliente": {
+      "main": [
+        [
+          {
+            "node": "Bot Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bot Logic": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Guardar Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Buscar Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ab321015-3ceb-4db9-8b03-9ea760760ce9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "691e994d009ecbc76d4274b7950b2f0d6092ed22b6ffd106a7356a1be82929e0"
+  },
+  "id": "cMwEFpuSps2MPz0L",
+  "tags": []
+}
